@@ -64,13 +64,17 @@ cats = categories(AllCalls.Label);
 goodCalls = any(AllCalls.Label == cats(CommonClasses)',2);
 AllCalls = AllCalls(AllCalls.Accepted == 1 & goodCalls ,:);
 AllCalls.Label = removecats(AllCalls.Label);
-cats = categories(AllCalls.Label);
+
+% --- MODIFICATION 1: FORCE ALPHABETICAL ORDER ---
+cats = sort(categories(AllCalls.Label)); % Sort categories alphabetically
+AllCalls.Label = reordercats(AllCalls.Label, cats); % Lock order in the data
+% ------------------------------------------------
 
 %% Create Transition Table
 counts = [];
 for i = 1:length(cats)
     for j = 1:length(cats)
-        %         counts(j,i) = mean((AllCalls{1:end-1,'Label'} == cats{i}) & (AllCalls{2:end,'Label'} == cats{j}));
+        % counts(j,i) = mean((AllCalls{1:end-1,'Label'} == cats{i}) & (AllCalls{2:end,'Label'} == cats{j}));
         x = sum(...
             ((AllCalls{1:end-1,'Label'} == cats{i}) & (AllCalls{2:end,'Label'} == cats{j})) & ...
             (AllCalls{1:end-1,'Bout'} == AllCalls{2:end,'Bout'}) &...
@@ -102,15 +106,59 @@ axis off
 g.ArrowSize = 15;
 g.LineWidth = 15*G.Edges.Weight;
 g.EdgeAlpha = .8;
-if isfield(g, 'NodeFontSize')
-    g.NodeFontSize = 12;
-end
 g.NodeColor = [.2 .2 .2];
-layout(g,'circle');
+
+% --- MODIFICATION 2 & 3: LOCK POSITIONS AND PUSH LABELS OUTWARD ---
+numNodes = numnodes(G);
+if numNodes > 0
+    % 1. Calculate the circle coordinates (Start top 12 o'clock, go clockwise)
+    theta = linspace(pi/2, -3*pi/2, numNodes+1); 
+    theta(end) = []; 
+    
+    % 2. Set node positions
+    g.XData = cos(theta);
+    g.YData = sin(theta);
+    
+    % 3. Turn off default labels to prevent overlap
+    g.NodeLabel = {}; 
+    
+    % 4. Draw custom labels further out
+    labelRadius = 1.25; % <--- INCREASE OR DECREASE THIS TO MOVE TEXT IN/OUT
+    
+    for k = 1:numNodes
+        % Smart horizontal alignment so text doesn't cross over the node
+        if cos(theta(k)) > 0.05
+            hAlign = 'left';
+        elseif cos(theta(k)) < -0.05
+            hAlign = 'right';
+        else
+            hAlign = 'center';
+        end
+        
+        % Smart vertical alignment for the top and bottom nodes
+        if sin(theta(k)) > 0.95
+            vAlign = 'bottom';
+        elseif sin(theta(k)) < -0.95
+            vAlign = 'top';
+        else
+            vAlign = 'middle';
+        end
+        
+        % Plot the text
+        text(labelRadius * cos(theta(k)), labelRadius * sin(theta(k)), cats{k}, ...
+            'FontSize', 12, 'HorizontalAlignment', hAlign, ...
+            'VerticalAlignment', vAlign, 'Interpreter', 'none');
+    end
+end
+% -----------------------------------------------------------------
+
 set(gcf,'Colormap',inferno);
-cb=colorbar;
+cb=colorbar(gca, 'NorthOutside');
 cb.Label.String='Transition Probability';
-cb.Label.Rotation=90;
+cb.Label.Rotation=0;
+
+% slightly expand the axes limits so the outward labels don't get cut off
+axis([-1.4 1.4 -1.4 1.4]);
 
 
 %% Save Matrix
@@ -161,6 +209,5 @@ if ~isnumeric(file)
 
     writetable(cell2table(output),[path file],'WriteVariableNames',0);
 end
-
 
 end
